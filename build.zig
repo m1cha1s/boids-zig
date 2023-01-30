@@ -13,7 +13,7 @@ pub fn build(b: *std.build.Builder) void {
 
     raylib.link(exe, system_lib);
     raylib.addAsPackage("raylib", exe);
-    raylib.math.addAsPackage("raymath", exe);
+    raylib.math.addAsPackage("raylib-math", exe);
 
     exe.install();
 
