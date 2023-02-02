@@ -56,8 +56,8 @@ pub fn main() !void {
 
         rl.DrawText("Hello world!", 100, 100, 20, rl.RAYWHITE);
 
-        for (boids.items) |_, boidIdx| {
-            boids.items[boidIdx].draw();
+        for (boids.items) |*boid| {
+            boid.draw();
         }
     }
 }
