@@ -6,9 +6,9 @@
 git clone https://github.com/m1cha1s/boids-zig.git
 cd boids-zig
 # Get all submodules
-git sumbmodule update --init
+git submodule update --init
 cd libs/raylib
-git sumbmodule update --init
+git submodule update --init
 cd ../..
 # To build
 zig build
