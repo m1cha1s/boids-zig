@@ -24,6 +24,24 @@ const Boid = struct {
 
         rl.DrawCircleV(self.pos, boidRadius, rl.RAYWHITE);
     }
+
+    fn wrap(self: *Boid) void {
+        if (self.pos.x < 0) self.pos.x += width;
+        if (self.pos.x >= width) self.pos.x -= width;
+
+        if (self.pos.y < 0) self.pos.y += height;
+        if (self.pos.y >= height) self.pos.y -= height;
+    }
+
+    fn update(self: *Boid) void {
+        self.vel = rlm.Vector2Add(self.vel, self.acc);
+        self.pos = rlm.Vector2Add(self.pos, self.vel);
+
+        self.wrap();
+
+        self.acc.x = 0;
+        self.acc.y = 0;
+    }
 };
 
 pub fn main() !void {
@@ -31,9 +49,6 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     defer _ = gpa.deinit();
-
-    // var boids = try allocator.alloc(Boid, boidCount);
-    // defer allocator.free(boids);
 
     var boids = std.ArrayList(Boid).init(allocator);
     defer boids.deinit();
@@ -49,6 +64,10 @@ pub fn main() !void {
     rl.SetTargetFPS(60);
 
     while (!rl.WindowShouldClose()) {
+        for (boids.items) |*boid| {
+            boid.update();
+        }
+
         rl.BeginDrawing();
         defer rl.EndDrawing();
 
