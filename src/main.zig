@@ -3,15 +3,18 @@ const rl = @import("raylib");
 const rlm = @import("raylib-math");
 
 const print = std.debug.print;
+const rand = std.crypto.random;
 
 const width = 800;
 const height = 800;
 
-const boidCount = 1;
+const boidCount = 100;
 
 const Boid = struct {
     const boidRadius = 5;
     const boidPointerLen = 10;
+    const boidSightDist = 30;
+    const boidSightDistSqr = boidSightDist * boidSightDist;
 
     pos: rl.Vector2 = rl.Vector2{ .x = width / 2, .y = height / 2 },
     vel: rl.Vector2 = rl.Vector2{ .x = 1, .y = 1 },
@@ -42,6 +45,41 @@ const Boid = struct {
         self.acc.x = 0;
         self.acc.y = 0;
     }
+
+    fn distanceToSqr(self: *Boid, friend: *const Boid) f32 {
+        return rlm.Vector2DistanceSqr(self.pos, friend.pos);
+    }
+
+    fn findInRange(self: *Boid, others: []Boid, allocator: std.mem.Allocator) !std.ArrayList(*Boid) {
+        var inRange = std.ArrayList(*Boid).init(allocator);
+
+        for (others) |*other| {
+            if (self.distanceToSqr(other) <= boidSightDistSqr) {
+                try inRange.append(other);
+            }
+        }
+
+        return inRange;
+    }
+
+    fn heading(self: *Boid) rl.Vector2 {
+        return rlm.Vector2Normalize(self.vel);
+    }
+
+    fn alignTo(self: *Boid, others: []*Boid) void {
+        var steering = rl.Vector2{ .x = 0, .y = 0 };
+
+        for (others) |other| {
+            steering = rlm.Vector2Add(steering, other.heading());
+        }
+
+        if (others.len > 0) {
+            steering = rlm.Vector2Scale(steering, (1.0 / @intToFloat(f32, others.len)));
+            steering = rlm.Vector2Subtract(steering, self.vel);
+
+            self.acc = rlm.Vector2Add(self.acc, steering);
+        }
+    }
 };
 
 pub fn main() !void {
@@ -55,7 +93,7 @@ pub fn main() !void {
 
     var i: usize = 0;
     while (i < boidCount) : (i += 1) {
-        try boids.append(Boid{});
+        try boids.append(Boid{ .pos = rl.Vector2{ .x = @intToFloat(f32, rand.intRangeAtMost(i32, 0, width)), .y = @intToFloat(f32, rand.intRangeAtMost(i32, 0, height)) }, .vel = rlm.Vector2Rotate(rl.Vector2{ .x = 1, .y = 0 }, rand.float(f32) * std.math.pi * 2) });
     }
 
     rl.InitWindow(width, height, "Boids");
@@ -65,18 +103,23 @@ pub fn main() !void {
 
     while (!rl.WindowShouldClose()) {
         for (boids.items) |*boid| {
+            var inRange = try boid.findInRange(boids.items, allocator);
+            defer inRange.deinit();
+
+            boid.alignTo(inRange.items);
+
             boid.update();
         }
 
-        rl.BeginDrawing();
-        defer rl.EndDrawing();
+        { // Do the drawing
+            rl.BeginDrawing();
+            defer rl.EndDrawing();
 
-        rl.ClearBackground(rl.BLACK);
+            rl.ClearBackground(rl.BLACK);
 
-        rl.DrawText("Hello world!", 100, 100, 20, rl.RAYWHITE);
-
-        for (boids.items) |*boid| {
-            boid.draw();
+            for (boids.items) |*boid| {
+                boid.draw();
+            }
         }
     }
 }
