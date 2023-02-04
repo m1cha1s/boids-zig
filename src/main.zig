@@ -8,13 +8,17 @@ const rand = std.crypto.random;
 const width = 800;
 const height = 800;
 
-const boidCount = 100;
+const boidCount = 1000;
 
 const Boid = struct {
-    const boidRadius = 5;
-    const boidPointerLen = 10;
-    const boidSightDist = 30;
+    const boidRadius = 3;
+    const boidPointerLen = 5;
+    const boidSightDist = 20;
     const boidSightDistSqr = boidSightDist * boidSightDist;
+
+    const boidMaxAlignmentForce = 0.05;
+    const boidMaxConhesionForce = 0.005;
+    const boidMaxSeparationForce = 0.005;
 
     pos: rl.Vector2 = rl.Vector2{ .x = width / 2, .y = height / 2 },
     vel: rl.Vector2 = rl.Vector2{ .x = 1, .y = 1 },
@@ -54,6 +58,7 @@ const Boid = struct {
         var inRange = std.ArrayList(*Boid).init(allocator);
 
         for (others) |*other| {
+            if (other == self) continue; // Prevent self referencing
             if (self.distanceToSqr(other) <= boidSightDistSqr) {
                 try inRange.append(other);
             }
@@ -66,7 +71,7 @@ const Boid = struct {
         return rlm.Vector2Normalize(self.vel);
     }
 
-    fn alignTo(self: *Boid, others: []*Boid) void {
+    fn alignment(self: *Boid, others: []*Boid) void {
         var steering = rl.Vector2{ .x = 0, .y = 0 };
 
         for (others) |other| {
@@ -76,6 +81,43 @@ const Boid = struct {
         if (others.len > 0) {
             steering = rlm.Vector2Scale(steering, (1.0 / @intToFloat(f32, others.len)));
             steering = rlm.Vector2Subtract(steering, self.vel);
+
+            steering = rlm.Vector2ClampValue(steering, 0, boidMaxAlignmentForce);
+
+            self.acc = rlm.Vector2Add(self.acc, steering);
+        }
+    }
+
+    fn cohesion(self: *Boid, others: []*Boid) void {
+        var avrgPos = rl.Vector2{ .x = 0, .y = 0 };
+
+        for (others) |other| {
+            avrgPos = rlm.Vector2Add(avrgPos, other.pos);
+        }
+
+        if (others.len > 0) {
+            avrgPos = rlm.Vector2Scale(avrgPos, 1 / @intToFloat(f32, others.len));
+
+            var steering = rlm.Vector2Subtract(avrgPos, self.pos);
+            steering = rlm.Vector2ClampValue(steering, 0, boidMaxConhesionForce);
+
+            self.acc = rlm.Vector2Add(self.acc, steering);
+        }
+    }
+
+    fn separation(self: *Boid, others: []*Boid) void {
+        var steering = rl.Vector2{ .x = 0, .y = 0 };
+
+        for (others) |other| {
+            var diff = rlm.Vector2Subtract(self.pos, other.pos);
+            diff = rlm.Vector2Scale(diff, 1 / std.math.sqrt(self.distanceToSqr(other)));
+            steering = rlm.Vector2Add(steering, diff);
+        }
+
+        if (others.len > 0) {
+            steering = rlm.Vector2Scale(steering, 1 / @intToFloat(f32, others.len));
+
+            steering = rlm.Vector2ClampValue(steering, 0, boidMaxSeparationForce);
 
             self.acc = rlm.Vector2Add(self.acc, steering);
         }
@@ -102,11 +144,15 @@ pub fn main() !void {
     rl.SetTargetFPS(60);
 
     while (!rl.WindowShouldClose()) {
+        print("Frame rate: {d:.2}Hz\n", .{1 / rl.GetFrameTime()});
+
         for (boids.items) |*boid| {
             var inRange = try boid.findInRange(boids.items, allocator);
             defer inRange.deinit();
 
-            boid.alignTo(inRange.items);
+            boid.alignment(inRange.items);
+            boid.cohesion(inRange.items);
+            boid.separation(inRange.items);
 
             boid.update();
         }
